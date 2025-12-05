@@ -1,33 +1,25 @@
 # =========================
-# 1) Node builder: build Vite assets -> public/build
+# 1) Node builder: Vite build -> public/build
 # =========================
 FROM node:22-bookworm AS nodebuild
 WORKDIR /app
 
-# 1) deps
+# Pasang dependencies dulu (lebih cepat build cache-nya)
 COPY package*.json ./
 RUN npm ci
 
-# 2) configs Vite/Tailwind/PostCSS/TS (yang tidak ada akan di-skip oleh Docker)
-COPY vite.config.ts ./
-COPY vite.config.js ./
-COPY postcss.config.js ./
-COPY postcss.config.cjs ./
-COPY tailwind.config.js ./
-COPY tailwind.config.cjs ./
-COPY tsconfig.json ./
+# Copy seluruh project (lebih aman untuk Filament 4)
+# Pastikan .dockerignore mengecualikan node_modules, vendor, dll
+COPY . .
 
-# 3) source assets
-COPY resources ./resources
-
-# 4) pastikan direktori output ada, lalu build
-RUN mkdir -p public
+# Build Vite
 ENV NODE_ENV=production
+RUN mkdir -p public
 RUN npm run build
 
 
 # =========================
-# 2) Composer deps (vendor)
+# 2) Composer vendor
 # =========================
 FROM composer:2 AS phpdeps
 WORKDIR /app
@@ -41,7 +33,7 @@ RUN composer install --no-dev --prefer-dist --no-progress --no-interaction --no-
 FROM php:8.4-fpm-bookworm AS phpruntime
 WORKDIR /var/www/html
 
-# Libs untuk ekstensi Laravel umum
+# Packages untuk Laravel + Filament
 RUN apt-get update && apt-get install -y \
     bash git unzip \
     libonig-dev \
@@ -52,13 +44,13 @@ RUN apt-get update && apt-get install -y \
     pdo pdo_pgsql zip gd intl bcmath opcache mbstring exif \
  && rm -rf /var/lib/apt/lists/*
 
-# Copy source aplikasi (pastikan .dockerignore kamu bersih dari node_modules, vendor, dll)
+# Copy kode Laravel
 COPY . .
 
 # Copy vendor dari stage composer
 COPY --from=phpdeps /app/vendor ./vendor
 
-# Permission minimal untuk Laravel
+# Permission Laravel
 RUN chown -R www-data:www-data storage bootstrap/cache \
  && find storage -type d -exec chmod 775 {} \; \
  && find storage -type f -exec chmod 664 {} \; \
@@ -69,22 +61,23 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD php -v || exit 1
 
 
 # =========================
-# 4) Nginx runtime (serve /public + build)
+# 4) Nginx runtime (serve /public & Vite build)
 # =========================
 FROM nginx:1.27-alpine AS nginximage
 WORKDIR /var/www/html
 
-# Copy folder public (index.php, dll)
+# Copy folder public Laravel
 COPY ./public ./public
 
-# Ambil hasil build Vite dari stage nodebuild -> /public/build
+# Copy hasil Vite build
 COPY --from=nodebuild /app/public/build ./public/build
 
-# Nginx config berada di docker/nginx/default.conf (sesuai request)
+# Copy Nginx config (dari docker/nginx/default.conf)
 COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
 
-# Bash untuk debug
+# Untuk debugging
 RUN apk add --no-cache bash
 
 EXPOSE 80
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1
