@@ -27,16 +27,19 @@ RUN composer install \
 ###############################################
 FROM php:8.4-fpm-bookworm AS php
 WORKDIR /var/www/html
+ENV COMPOSER_ALLOW_SUPERUSER=1
 
 # Install PHP extensions required by Laravel
 RUN apt-get update && apt-get install -y \
-    bash git unzip \
+    bash git unzip postgresql-client \
     libonig-dev libpq-dev libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
     libicu-dev libssl-dev libxml2-dev \
  && docker-php-ext-configure gd --with-freetype --with-jpeg \
  && docker-php-ext-install -j"$(nproc)" \
-    pdo pdo_pgsql zip gd intl bcmath opcache mbstring exif \
+    pdo pdo_pgsql pgsql zip gd intl bcmath opcache mbstring exif \
  && rm -rf /var/lib/apt/lists/*
+
+RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 
 COPY . .
 COPY --from=vendor /app/vendor ./vendor
@@ -45,7 +48,9 @@ COPY --from=nodebuild /app/public/build ./public/build
 RUN mkdir -p storage/framework/cache/data \
     storage/framework/sessions \
     storage/framework/views \
+    storage/app/public \
     bootstrap/cache \
+ && ln -snf /var/www/html/storage/app/public /var/www/html/public/storage \
  && chown -R www-data:www-data storage bootstrap/cache \
  && find storage -type d -exec chmod 775 {} \; \
  && find storage -type f -exec chmod 664 {} \; \
@@ -59,8 +64,8 @@ EXPOSE 9000
 FROM nginx:1.27-alpine AS nginx
 WORKDIR /var/www/html
 
-COPY ./public ./public
-COPY --from=nodebuild /app/public/build ./public/build
+COPY --from=php /var/www/html/public ./public
+COPY --from=php /var/www/html/storage ./storage
 COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
 RUN apk add --no-cache bash
 

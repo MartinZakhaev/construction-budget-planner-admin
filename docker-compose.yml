@@ -6,6 +6,28 @@ services:
       target: php
     expose:
       - "9000"
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: https://planin.43-157-213-47.sslip.io
+      DB_CONNECTION: pgsql
+      DB_HOST: ${DB_HOST:-43.157.213.47}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-filament}
+      DB_USERNAME: ${DB_USERNAME:-filament}
+      DB_PASSWORD: ${DB_PASSWORD:-change-me}
+      SESSION_DRIVER: database
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+      TZ: ${TZ:-UTC}
+    volumes:
+      - app-storage:/var/www/html/storage
+      - app-bootstrap-cache:/var/www/html/bootstrap/cache
+    healthcheck:
+      test: ["CMD-SHELL", "php -r \"echo 'OK';\" >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   nginx:
@@ -14,7 +36,15 @@ services:
       dockerfile: Dockerfile
       target: nginx
     ports:
-      - "8080:80"
+      - "80:80"
     depends_on:
-      - php
+      php:
+        condition: service_healthy
+    volumes:
+      - app-storage:/var/www/html/storage:ro
+      - app-bootstrap-cache:/var/www/html/bootstrap/cache:ro
     restart: unless-stopped
+
+volumes:
+  app-storage:
+  app-bootstrap-cache:
