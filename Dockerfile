@@ -1,5 +1,5 @@
 # ---- Stage 1: build assets (Vite/Filament) ----
-FROM node:22-bullseye AS nodebuild
+FROM node:22-alpine AS nodebuild
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
