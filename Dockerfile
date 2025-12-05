@@ -1,5 +1,5 @@
 ###############################################
-# 1) Node Builder: compile Vite assets
+# 1) Node Builder (Vite build for Filament 4)
 ###############################################
 FROM node:22-bookworm AS nodebuild
 WORKDIR /app
@@ -12,7 +12,7 @@ ENV NODE_ENV=production
 RUN npm run build
 
 ###############################################
-# 2) Composer dependencies
+# 2) Composer Vendor Builder
 ###############################################
 FROM composer:2 AS vendor
 WORKDIR /app
@@ -23,15 +23,13 @@ RUN composer install \
     --ignore-platform-req=ext-intl
 
 ###############################################
-# 3) Final runtime: PHP-FPM + Nginx in one container
+# 3) PHP Runtime (PHP 8.4 FPM)
 ###############################################
-FROM php:8.4-fpm-bookworm AS app
+FROM php:8.4-fpm-bookworm AS php
 WORKDIR /var/www/html
 
-# System packages, PHP extensions, and nginx
 RUN apt-get update && apt-get install -y \
-    nginx \
-    bash git unzip supervisor \
+    bash git unzip \
     libonig-dev libpq-dev libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
     libicu-dev libssl-dev libxml2-dev \
  && docker-php-ext-configure gd --with-freetype --with-jpeg \
@@ -39,23 +37,26 @@ RUN apt-get update && apt-get install -y \
     pdo pdo_pgsql zip gd intl bcmath opcache mbstring exif \
  && rm -rf /var/lib/apt/lists/*
 
-# Copy application code
 COPY . .
-
-# Vendor + built assets
 COPY --from=vendor /app/vendor ./vendor
 COPY --from=nodebuild /app/public/build ./public/build
 
-# Configure nginx
-COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
-RUN rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-available/default || true
-
-# Permissions for storage/cache
 RUN chown -R www-data:www-data storage bootstrap/cache \
  && find storage -type d -exec chmod 775 {} \; \
  && find storage -type f -exec chmod 664 {} \; \
  && chmod -R 775 bootstrap/cache
 
-EXPOSE 80
+EXPOSE 9000
 
-CMD ["bash", "-c", "php-fpm -D && nginx -g 'daemon off;'"]
+###############################################
+# 4) Nginx Runtime
+###############################################
+FROM nginx:1.27-alpine AS nginx
+WORKDIR /var/www/html
+
+COPY ./public ./public
+COPY --from=nodebuild /app/public/build ./public/build
+COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
+RUN apk add --no-cache bash
+
+EXPOSE 80
