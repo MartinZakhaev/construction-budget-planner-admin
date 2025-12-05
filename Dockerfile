@@ -1,5 +1,8 @@
-# ============ Stage 1: Build frontend assets (Node 22) ============
+# =====================================================================================
+# STAGE 1 — Node 22 build untuk Vite
+# =====================================================================================
 FROM node:22-bookworm AS nodebuild
+
 WORKDIR /app
 
 COPY package*.json ./
@@ -9,108 +12,77 @@ COPY . .
 RUN npm run build
 
 
-# ============ Stage 2: PHP deps + Composer (full extensions) ============
+# =====================================================================================
+# STAGE 2 — PHP 8.4 + Composer + vendor install
+# =====================================================================================
 FROM php:8.4-fpm-bookworm AS phpdeps
+
+# INSTALL BASH (fix: bash not found)
+RUN apt-get update && apt-get install -y bash
+
 WORKDIR /app
 
+# Ekstensi Laravel + Filament
 RUN apt-get update && apt-get install -y \
-    git \
-    unzip \
-    pkg-config \
-    libonig-dev \
-    libpq-dev \
-    libzip-dev \
-    libpng-dev \
-    libjpeg-dev \
-    libfreetype6-dev \
-    libicu-dev \
-    libssl-dev \
-    libxml2-dev \
+    git unzip libonig-dev \
+    libpq-dev libzip-dev libpng-dev libjpeg-dev libfreetype6-dev \
+    libicu-dev libssl-dev libxml2-dev \
     --no-install-recommends \
  && docker-php-ext-configure gd --with-freetype --with-jpeg \
  && docker-php-ext-install \
-    pdo \
-    pdo_pgsql \
-    zip \
-    gd \
-    intl \
-    bcmath \
-    opcache \
-    mbstring \
-    exif \
+        pdo \
+        pdo_pgsql \
+        zip \
+        gd \
+        intl \
+        bcmath \
+        opcache \
+        mbstring \
+        exif \
  && rm -rf /var/lib/apt/lists/*
 
-# Composer binary
+# Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
-# >>> Prevent global-composer warning & keep composer isolated
-ENV COMPOSER_HOME=/tmp/composer \
-    COMPOSER_CACHE_DIR=/tmp/composer-cache \
-    COMPOSER_MEMORY_LIMIT=-1 \
+ENV COMPOSER_MEMORY_LIMIT=-1 \
     COMPOSER_ALLOW_SUPERUSER=1 \
     COMPOSER_DISABLE_XDEBUG_WARN=1
-RUN mkdir -p /tmp/composer /tmp/composer-cache
 
-# Jika ada isu kompatibilitas PHP 8.4, boleh aktifkan ini:
-# RUN composer config platform.php 8.3.0
+# Platform lock (ngurangin error dependency php 8.4)
+RUN composer config platform.php 8.2.0
 
 COPY composer.json composer.lock ./
-RUN php -v && php -m | sort && composer --version && composer validate -n --no-plugins
 
-# Matikan artisan scripts & plugins saat build (hindari package:discover & plugin global)
-RUN composer install \
-    --no-dev \
-    --no-interaction \
-    --prefer-dist \
-    --optimize-autoloader \
-    --no-scripts \
-    --no-plugins \
-    -vvv \
-    --no-progress \
- || (echo '--- COMPOSER DIAG ---' && php -v && php -m | sort && composer diagnose && exit 1)
+# Debug info (optional)
+RUN php -v && php -m && composer --version
+
+# Install vendor
+RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader -vvv \
+ || (composer diagnose && exit 1)
 
 COPY . .
-RUN composer install \
-    --no-dev \
-    --no-interaction \
-    --prefer-dist \
-    --optimize-autoloader \
-    --no-scripts \
-    --no-plugins \
-    -vvv \
-    --no-progress \
- || (echo '--- COMPOSER DIAG (after copy) ---' && php -v && php -m | sort && composer diagnose && exit 1)
+RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader -vvv \
+ || (composer diagnose && exit 1)
 
 
-# ============ Stage 3: Runtime (PHP-FPM 8.4) ============
-FROM php:8.4-fpm-bookworm AS phpruntime
+# =====================================================================================
+# STAGE 3 — Runtime: PHP-FPM final image
+# =====================================================================================
+FROM php:8.4-fpm-bookworm
+
+# INSTALL BASH (fix exec: bash not found)
+RUN apt-get update && apt-get install -y bash && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /var/www/html
 
+# Ekstensi runtime
 RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libonig-dev \
-    libpq-dev \
-    libzip-dev \
-    libpng-dev \
-    libjpeg-dev \
-    libfreetype6-dev \
-    libicu-dev \
-    libssl-dev \
-    libxml2-dev \
-    --no-install-recommends \
+    libonig-dev libpq-dev libzip-dev libpng-dev libjpeg-dev libfreetype6-dev \
+    libicu-dev libssl-dev libxml2-dev --no-install-recommends \
  && docker-php-ext-configure gd --with-freetype --with-jpeg \
- && docker-php-ext-install \
-    pdo \
-    pdo_pgsql \
-    zip \
-    gd \
-    intl \
-    bcmath \
-    opcache \
-    mbstring \
-    exif \
+ && docker-php-ext-install pdo pdo_pgsql zip gd intl bcmath opcache mbstring exif \
  && rm -rf /var/lib/apt/lists/*
 
+# Opcache
 RUN { \
   echo 'opcache.enable=1'; \
   echo 'opcache.enable_cli=0'; \
@@ -119,29 +91,15 @@ RUN { \
   echo 'opcache.max_accelerated_files=20000'; \
 } > /usr/local/etc/php/conf.d/opcache.ini
 
-# Copy app (vendor sudah dari phpdeps) + assets build
-COPY --from=phpdeps  /app /var/www/html
+# Copy App
+COPY --from=phpdeps /app /var/www/html
+
+# Copy Vite build result
 COPY --from=nodebuild /app/public/build /var/www/html/public/build
 
-RUN mkdir -p storage bootstrap/cache \
- && chown -R www-data:www-data storage bootstrap/cache
+# Fix permissions
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
 USER www-data
+
 CMD ["php-fpm", "-F"]
-
-
-# ============ Stage 4: Nginx image (serve public) ============
-FROM nginx:1.27-alpine AS nginximage
-WORKDIR /var/www/html
-
-COPY --from=phpdeps  /app /var/www/html
-COPY --from=nodebuild /app/public/build /var/www/html/public/build
-COPY nginx/default.conf /etc/nginx/conf.d/default.conf
-
-# Keep running as root so nginx can bind to :80
-# (Optional) tighten perms but keep readable for nginx:
-RUN chown -R root:root /var/www/html && chmod -R a+rX /var/www/html
-
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
-
