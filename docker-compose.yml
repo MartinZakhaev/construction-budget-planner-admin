@@ -1,6 +1,5 @@
-# docker-compose.yml
 services:
-  app-php:
+  php:
     build:
       context: .
       dockerfile: Dockerfile
@@ -11,14 +10,12 @@ services:
       APP_ENV: ${APP_ENV:-production}
       APP_DEBUG: ${APP_DEBUG:-false}
       LOG_CHANNEL: ${LOG_CHANNEL:-stderr}
-      # DB (gunakan .env kamu)
       DB_CONNECTION: ${DB_CONNECTION:-pgsql}
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT:-5432}
       DB_DATABASE: ${DB_DATABASE}
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
-      # Redis (opsional, untuk cache/queue/session)
       CACHE_DRIVER: ${CACHE_DRIVER:-redis}
       QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
       SESSION_DRIVER: ${SESSION_DRIVER:-redis}
@@ -32,7 +29,7 @@ services:
     networks:
       - appnet
 
-  app-nginx:
+  nginx:   # <--- penting: nama service harus 'nginx'
     build:
       context: .
       dockerfile: Dockerfile
@@ -40,7 +37,7 @@ services:
     ports:
       - "8080:80"
     depends_on:
-      - app-php
+      - php
     restart: unless-stopped
     networks:
       - appnet
@@ -55,7 +52,7 @@ services:
     networks:
       - appnet
 
-  # Opsional: Laravel queue worker
+  # Opsional: queue worker
   queue:
     build:
       context: .
@@ -64,7 +61,7 @@ services:
     env_file:
       - .env
     depends_on:
-      - app-php
+      - php
       - redis
     command: >
       sh -lc "php artisan queue:work --tries=3 --sleep=1 --max-time=3600"
@@ -72,7 +69,7 @@ services:
     networks:
       - appnet
 
-  # Opsional: Laravel scheduler
+  # Opsional: scheduler
   scheduler:
     build:
       context: .
@@ -81,9 +78,8 @@ services:
     env_file:
       - .env
     depends_on:
-      - app-php
+      - php
       - redis
-    # gunakan schedule:work agar non-blocking & auto-loop
     command: >
       sh -lc "php artisan schedule:work"
     restart: unless-stopped
