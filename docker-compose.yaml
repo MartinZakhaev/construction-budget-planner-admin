@@ -1,7 +1,6 @@
 version: "3.9"
 
 services:
-  # Sekali jalan: salin kode dari image app ke volume appcode
   app-init:
     image: planin/filament-app:dev
     command: sh -c 'cp -a /var/www/html/. /app && chown -R www-data:www-data /app'
