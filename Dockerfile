@@ -1,172 +1,90 @@
 # =========================
-# Stage 1 — Build frontend (Node 22)
+# 1) Node builder: build Vite assets -> public/build
 # =========================
 FROM node:22-bookworm AS nodebuild
 WORKDIR /app
 
-# Lebih efektif buat cache
+# 1) deps
 COPY package*.json ./
 RUN npm ci
 
-# Copy sumber yang relevan untuk Vite/Tailwind
-COPY resources ./resources
-COPY public ./public
-# (opsional) kalau ada file konfigurasi, un-comment sesuai repo kamu
-# COPY vite.config.* ./
-# COPY tailwind.config.* ./
-# COPY postcss.config.* ./
-# COPY tsconfig*.json ./
+# 2) configs Vite/Tailwind/PostCSS/TS (yang tidak ada akan di-skip oleh Docker)
+COPY vite.config.ts ./
+COPY vite.config.js ./
+COPY postcss.config.js ./
+COPY postcss.config.cjs ./
+COPY tailwind.config.js ./
+COPY tailwind.config.cjs ./
+COPY tsconfig.json ./
 
-# Build assets -> hasil ke public/build
+# 3) source assets
+COPY resources ./resources
+
+# 4) pastikan direktori output ada, lalu build
+RUN mkdir -p public
+ENV NODE_ENV=production
 RUN npm run build
 
 
 # =========================
-# Stage 2 — Composer deps (PHP 8.4) tanpa jalanin script
+# 2) Composer deps (vendor)
 # =========================
-FROM php:8.4-fpm-bookworm AS phpdeps
+FROM composer:2 AS phpdeps
 WORKDIR /app
-
-# Tools dan lib yang diperlukan ext PHP
-RUN apt-get update && apt-get install -y \
-    bash git unzip \
-    libonig-dev \ 
-    libpq-dev libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
-    libicu-dev libssl-dev libxml2-dev \
-  && docker-php-ext-configure gd --with-freetype --with-jpeg \
-  && docker-php-ext-install -j$(nproc) \
-        pdo \
-        pdo_pgsql \
-        zip \
-        gd \
-        intl \
-        bcmath \
-        opcache \
-        mbstring \
-        exif \
-  && rm -rf /var/lib/apt/lists/*
-
-# pakai composer official
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-ENV COMPOSER_MEMORY_LIMIT=-1 \
-    COMPOSER_ALLOW_SUPERUSER=1 \
-    COMPOSER_DISABLE_XDEBUG_WARN=1 \
-    COMPOSER_NO_INTERACTION=1
-
-# Copy composer files dulu biar cache maksimal
 COPY composer.json composer.lock ./
-
-# Validasi & install vendor (TANPA scripts agar tidak gagal di build time)
-RUN php -v && php -m | sort && composer --version && composer validate -n
-RUN composer install --no-dev --prefer-dist --optimize-autoloader --no-scripts -vvv --no-progress
-
-# Copy seluruh source (kecuali node_modules yg tak dipakai disini)
-COPY . .
-
-# (opsional) jika butuh autoload ulang setelah source lengkap
-RUN composer dump-autoload -o --no-scripts
+RUN composer install --no-dev --prefer-dist --no-progress --no-interaction --no-scripts
 
 
 # =========================
-# Stage 3 — Runtime (PHP-FPM 8.4)
+# 3) PHP-FPM runtime (PHP 8.4)
 # =========================
 FROM php:8.4-fpm-bookworm AS phpruntime
 WORKDIR /var/www/html
 
-# Pasang paket runtime + bash (biar `docker exec ... bash` tidak error)
+# Libs untuk ekstensi Laravel umum
 RUN apt-get update && apt-get install -y \
-    bash \
+    bash git unzip \
     libonig-dev \
     libpq-dev libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
     libicu-dev libssl-dev libxml2-dev \
-  && docker-php-ext-configure gd --with-freetype --with-jpeg \
-  && docker-php-ext-install -j$(nproc) \
-        pdo \
-        pdo_pgsql \
-        zip \
-        gd \
-        intl \
-        bcmath \
-        opcache \
-        mbstring \
-        exif \
-  && rm -rf /var/lib/apt/lists/*
+ && docker-php-ext-configure gd --with-freetype --with-jpeg \
+ && docker-php-ext-install -j"$(nproc)" \
+    pdo pdo_pgsql zip gd intl bcmath opcache mbstring exif \
+ && rm -rf /var/lib/apt/lists/*
 
-# Opcache basic tune
-RUN { \
-  echo 'opcache.enable=1'; \
-  echo 'opcache.enable_cli=0'; \
-  echo 'opcache.validate_timestamps=1'; \
-  echo 'opcache.revalidate_freq=0'; \
-  echo 'opcache.max_accelerated_files=20000'; \
-} > /usr/local/etc/php/conf.d/opcache.ini
+# Copy source aplikasi (pastikan .dockerignore kamu bersih dari node_modules, vendor, dll)
+COPY . .
 
-# Copy app dari stage phpdeps (sudah ada vendor)
-COPY --from=phpdeps /app /var/www/html
+# Copy vendor dari stage composer
+COPY --from=phpdeps /app/vendor ./vendor
 
-# Copy asset build dari nodebuild
-COPY --from=nodebuild /app/public/build /var/www/html/public/build
+# Permission minimal untuk Laravel
+RUN chown -R www-data:www-data storage bootstrap/cache \
+ && find storage -type d -exec chmod 775 {} \; \
+ && find storage -type f -exec chmod 664 {} \; \
+ && chmod -R 775 bootstrap/cache
 
-# Permission Laravel
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
-
-USER www-data
-CMD ["php-fpm", "-F"]
+EXPOSE 9000
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD php -v || exit 1
 
 
 # =========================
-# Stage 4 — Nginx (alpine) untuk serve static + proxy ke php
+# 4) Nginx runtime (serve /public + build)
 # =========================
 FROM nginx:1.27-alpine AS nginximage
-
-# Pasang bash supaya exec ke container pakai bash bisa
-RUN apk add --no-cache bash
-
-# Tulis default.conf langsung (tidak perlu file eksternal)
-RUN mkdir -p /etc/nginx/conf.d && cat > /etc/nginx/conf.d/default.conf <<'NGINXCONF'
-server {
-    listen 80;
-    server_name _;
-
-    root /var/www/html/public;
-    index index.php index.html;
-
-    # serve Vite build assets
-    location /build/ {
-        try_files $uri =404;
-        access_log off;
-        expires 30d;
-    }
-
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-
-    location ~ \.php$ {
-        # SAMAKAN dengan service php-fpm di docker-compose
-        fastcgi_pass php:9000;
-        fastcgi_index index.php;
-
-        include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-
-        # kalau di belakang proxy/https
-        fastcgi_param HTTP_X_FORWARDED_PROTO $http_x_forwarded_proto;
-        fastcgi_param HTTP_X_FORWARDED_HOST  $http_x_forwarded_host;
-        fastcgi_param HTTP_X_FORWARDED_PORT  $http_x_forwarded_port;
-    }
-
-    location ~ /\.ht {
-        deny all;
-    }
-
-    gzip on;
-    gzip_types text/plain text/css application/json application/javascript application/xml image/svg+xml;
-    gzip_min_length 1024;
-}
-NGINXCONF
-
 WORKDIR /var/www/html
 
-# Hanya perlu assets di nginx (index.php akan diproses di php-fpm)
-COPY --from=nodebuild /app/public/build /var/www/html/public/build
+# Copy folder public (index.php, dll)
+COPY ./public ./public
+
+# Ambil hasil build Vite dari stage nodebuild -> /public/build
+COPY --from=nodebuild /app/public/build ./public/build
+
+# Nginx config berada di docker/nginx/default.conf (sesuai request)
+COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
+
+# Bash untuk debug
+RUN apk add --no-cache bash
+
+EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1

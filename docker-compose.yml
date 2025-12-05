@@ -1,71 +1,98 @@
-version: "3.9"
-
+# docker-compose.yml
 services:
-  php:
+  app-php:
     build:
       context: .
+      dockerfile: Dockerfile
       target: phpruntime
-    container_name: app-php
-    restart: unless-stopped
     env_file:
       - .env
     environment:
-      # Pastikan APP_URL pakai http kalau belum ada TLS/terminasi SSL di depan
-      APP_URL: ${APP_URL:-http://localhost}
-      # Agar Queue/URL generated benar saat dibelakang proxy
-      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-*}
-    volumes:
-      # simpan storage sebagai volume supaya data upload/log persisten
-      - laravel-storage:/var/www/html/storage
-      # (opsional) kalau ingin lihat log di host:
-      # - ./storage/logs:/var/www/html/storage/logs
-    healthcheck:
-      test: ["CMD", "php", "-v"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      LOG_CHANNEL: ${LOG_CHANNEL:-stderr}
+      # DB (gunakan .env kamu)
+      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      # Redis (opsional, untuk cache/queue/session)
+      CACHE_DRIVER: ${CACHE_DRIVER:-redis}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
+      SESSION_DRIVER: ${SESSION_DRIVER:-redis}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+    expose:
+      - "9000"
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - appnet
 
-  nginx:
+  app-nginx:
     build:
       context: .
+      dockerfile: Dockerfile
       target: nginximage
-    container_name: app-nginx
-    depends_on:
-      - php
     ports:
-      - "8080:80"     # akses di http://localhost:8080
+      - "8080:80"
+    depends_on:
+      - app-php
     restart: unless-stopped
-    volumes:
-      # Nginx butuh lihat public/build; kita sudah COPY di image.
-      # Kalau mau share storage untuk file public/storage, mount juga:
-      - laravel-storage:/var/www/html/storage:ro
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/healthz || exit 1"]
-      interval: 20s
-      timeout: 5s
-      retries: 10
+    networks:
+      - appnet
 
-  # (opsional) Scheduler pakai image yang sama dengan php 8.4
+  # Opsional: Redis untuk cache/queue/session
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - appnet
+
+  # Opsional: Laravel queue worker
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: phpruntime
+    env_file:
+      - .env
+    depends_on:
+      - app-php
+      - redis
+    command: >
+      sh -lc "php artisan queue:work --tries=3 --sleep=1 --max-time=3600"
+    restart: unless-stopped
+    networks:
+      - appnet
+
+  # Opsional: Laravel scheduler
   scheduler:
     build:
       context: .
+      dockerfile: Dockerfile
       target: phpruntime
-    container_name: app-scheduler
-    depends_on:
-      - php
-    restart: unless-stopped
     env_file:
       - .env
-    environment:
-      APP_URL: ${APP_URL:-http://localhost}
-      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-*}
+    depends_on:
+      - app-php
+      - redis
+    # gunakan schedule:work agar non-blocking & auto-loop
     command: >
-      bash -lc "
-        php artisan optimize || true &&
-        php artisan schedule:work
-      "
-    volumes:
-      - laravel-storage:/var/www/html/storage
+      sh -lc "php artisan schedule:work"
+    restart: unless-stopped
+    networks:
+      - appnet
 
 volumes:
-  laravel-storage:
+  redis-data:
+
+networks:
+  appnet:
+    driver: bridge
