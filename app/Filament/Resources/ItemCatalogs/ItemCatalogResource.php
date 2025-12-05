@@ -10,10 +10,8 @@ use App\Filament\Resources\ItemCatalogs\Schemas\ItemCatalogForm;
 use App\Filament\Resources\ItemCatalogs\Schemas\ItemCatalogInfolist;
 use App\Filament\Resources\ItemCatalogs\Tables\ItemCatalogsTable;
 use App\Models\ItemCatalog;
-use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -21,8 +19,6 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 class ItemCatalogResource extends Resource
 {
     protected static ?string $model = ItemCatalog::class;
-
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
     public static function form(Schema $schema): Schema
     {
@@ -63,4 +59,21 @@ class ItemCatalogResource extends Resource
                 SoftDeletingScope::class,
             ]);
     }
+
+
+    public static function getNavigationGroup(): ?string
+    {
+        return 'Master Catalogs';
+    }
+
+    public static function getNavigationIcon(): ?string
+    {
+        return 'heroicon-o-cube';
+    }
+
+    public static function getNavigationSort(): ?int
+    {
+        return 3;
+    }
+
 }

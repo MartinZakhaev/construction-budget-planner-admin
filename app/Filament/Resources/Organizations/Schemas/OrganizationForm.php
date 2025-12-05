@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Organizations\Schemas;
 
+use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
 
 class OrganizationForm
@@ -10,7 +11,11 @@ class OrganizationForm
     {
         return $schema
             ->components([
-                //
+                TextInput::make('name')
+                    ->required(),
+                TextInput::make('code'),
+                TextInput::make('owner_user_id')
+                    ->required(),
             ]);
     }
 }

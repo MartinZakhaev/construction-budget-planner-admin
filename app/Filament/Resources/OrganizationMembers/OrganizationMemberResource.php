@@ -10,10 +10,8 @@ use App\Filament\Resources\OrganizationMembers\Schemas\OrganizationMemberForm;
 use App\Filament\Resources\OrganizationMembers\Schemas\OrganizationMemberInfolist;
 use App\Filament\Resources\OrganizationMembers\Tables\OrganizationMembersTable;
 use App\Models\OrganizationMember;
-use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -21,8 +19,6 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 class OrganizationMemberResource extends Resource
 {
     protected static ?string $model = OrganizationMember::class;
-
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
     public static function form(Schema $schema): Schema
     {
@@ -63,4 +59,21 @@ class OrganizationMemberResource extends Resource
                 SoftDeletingScope::class,
             ]);
     }
+
+
+    public static function getNavigationGroup(): ?string
+    {
+        return 'Collaboration';
+    }
+
+    public static function getNavigationIcon(): ?string
+    {
+        return 'heroicon-o-users';
+    }
+
+    public static function getNavigationSort(): ?int
+    {
+        return 2;
+    }
+
 }

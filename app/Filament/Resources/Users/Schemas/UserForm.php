@@ -16,7 +16,7 @@ class UserForm
                     ->label('Email address')
                     ->email()
                     ->required(),
-                Textarea::make('password_hash')
+                Textarea::make('password')
                     ->required()
                     ->columnSpanFull(),
                 TextInput::make('full_name'),

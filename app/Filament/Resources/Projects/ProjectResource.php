@@ -10,10 +10,8 @@ use App\Filament\Resources\Projects\Schemas\ProjectForm;
 use App\Filament\Resources\Projects\Schemas\ProjectInfolist;
 use App\Filament\Resources\Projects\Tables\ProjectsTable;
 use App\Models\Project;
-use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -21,8 +19,6 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 class ProjectResource extends Resource
 {
     protected static ?string $model = Project::class;
-
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
     public static function form(Schema $schema): Schema
     {
@@ -63,4 +59,21 @@ class ProjectResource extends Resource
                 SoftDeletingScope::class,
             ]);
     }
+
+
+    public static function getNavigationGroup(): ?string
+    {
+        return 'Workspace';
+    }
+
+    public static function getNavigationIcon(): ?string
+    {
+        return 'heroicon-o-briefcase';
+    }
+
+    public static function getNavigationSort(): ?int
+    {
+        return 1;
+    }
+
 }

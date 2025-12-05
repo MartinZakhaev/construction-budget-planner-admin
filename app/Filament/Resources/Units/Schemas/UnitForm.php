@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Units\Schemas;
 
+use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
 
 class UnitForm
@@ -10,7 +11,10 @@ class UnitForm
     {
         return $schema
             ->components([
-                //
+                TextInput::make('code')
+                    ->required(),
+                TextInput::make('name')
+                    ->required(),
             ]);
     }
 }

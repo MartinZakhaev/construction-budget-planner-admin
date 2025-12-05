@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Plans\Schemas;
 
+use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
 
 class PlanForm
@@ -10,7 +11,23 @@ class PlanForm
     {
         return $schema
             ->components([
-                //
+                TextInput::make('code')
+                    ->required(),
+                TextInput::make('name')
+                    ->required(),
+                TextInput::make('price_cents')
+                    ->required()
+                    ->numeric(),
+                TextInput::make('currency')
+                    ->required()
+                    ->default('IDR'),
+                TextInput::make('interval')
+                    ->required()
+                    ->default('monthly'),
+                TextInput::make('max_projects')
+                    ->required()
+                    ->numeric()
+                    ->default(10),
             ]);
     }
 }

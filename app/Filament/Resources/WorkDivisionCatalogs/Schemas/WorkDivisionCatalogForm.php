@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\WorkDivisionCatalogs\Schemas;
 
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
 use Filament\Schemas\Schema;
 
 class WorkDivisionCatalogForm
@@ -10,7 +12,12 @@ class WorkDivisionCatalogForm
     {
         return $schema
             ->components([
-                //
+                TextInput::make('code')
+                    ->required(),
+                TextInput::make('name')
+                    ->required(),
+                Textarea::make('description')
+                    ->columnSpanFull(),
             ]);
     }
 }

@@ -10,10 +10,8 @@ use App\Filament\Resources\WorkDivisionCatalogs\Schemas\WorkDivisionCatalogForm;
 use App\Filament\Resources\WorkDivisionCatalogs\Schemas\WorkDivisionCatalogInfolist;
 use App\Filament\Resources\WorkDivisionCatalogs\Tables\WorkDivisionCatalogsTable;
 use App\Models\WorkDivisionCatalog;
-use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -21,8 +19,6 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 class WorkDivisionCatalogResource extends Resource
 {
     protected static ?string $model = WorkDivisionCatalog::class;
-
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
     public static function form(Schema $schema): Schema
     {
@@ -63,4 +59,21 @@ class WorkDivisionCatalogResource extends Resource
                 SoftDeletingScope::class,
             ]);
     }
+
+
+    public static function getNavigationGroup(): ?string
+    {
+        return 'Master Catalogs';
+    }
+
+    public static function getNavigationIcon(): ?string
+    {
+        return 'heroicon-o-rectangle-group';
+    }
+
+    public static function getNavigationSort(): ?int
+    {
+        return 1;
+    }
+
 }

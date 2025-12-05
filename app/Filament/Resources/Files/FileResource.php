@@ -10,10 +10,8 @@ use App\Filament\Resources\Files\Schemas\FileForm;
 use App\Filament\Resources\Files\Schemas\FileInfolist;
 use App\Filament\Resources\Files\Tables\FilesTable;
 use App\Models\File;
-use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -21,8 +19,6 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 class FileResource extends Resource
 {
     protected static ?string $model = File::class;
-
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
     public static function form(Schema $schema): Schema
     {
@@ -63,4 +59,21 @@ class FileResource extends Resource
                 SoftDeletingScope::class,
             ]);
     }
+
+
+    public static function getNavigationGroup(): ?string
+    {
+        return 'Workspace';
+    }
+
+    public static function getNavigationIcon(): ?string
+    {
+        return 'heroicon-o-rectangle-stack';
+    }
+
+    public static function getNavigationSort(): ?int
+    {
+        return 7;
+    }
+
 }

@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\AuditLogs\Schemas;
 
+use App\Models\AuditLog;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
 
 class AuditLogInfolist
@@ -10,7 +12,33 @@ class AuditLogInfolist
     {
         return $schema
             ->components([
-                //
+                TextEntry::make('id')
+                    ->label('ID'),
+                TextEntry::make('user.id')
+                    ->label('User')
+                    ->placeholder('-'),
+                TextEntry::make('project.name')
+                    ->label('Project')
+                    ->placeholder('-'),
+                TextEntry::make('action'),
+                TextEntry::make('entity_table')
+                    ->placeholder('-'),
+                TextEntry::make('entity_id')
+                    ->placeholder('-'),
+                TextEntry::make('ip')
+                    ->placeholder('-'),
+                TextEntry::make('user_agent')
+                    ->placeholder('-')
+                    ->columnSpanFull(),
+                TextEntry::make('created_at')
+                    ->dateTime()
+                    ->placeholder('-'),
+                TextEntry::make('updated_at')
+                    ->dateTime()
+                    ->placeholder('-'),
+                TextEntry::make('deleted_at')
+                    ->dateTime()
+                    ->visible(fn (AuditLog $record): bool => $record->trashed()),
             ]);
     }
 }

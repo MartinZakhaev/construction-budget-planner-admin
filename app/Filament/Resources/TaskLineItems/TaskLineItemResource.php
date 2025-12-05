@@ -10,10 +10,8 @@ use App\Filament\Resources\TaskLineItems\Schemas\TaskLineItemForm;
 use App\Filament\Resources\TaskLineItems\Schemas\TaskLineItemInfolist;
 use App\Filament\Resources\TaskLineItems\Tables\TaskLineItemsTable;
 use App\Models\TaskLineItem;
-use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -21,8 +19,6 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 class TaskLineItemResource extends Resource
 {
     protected static ?string $model = TaskLineItem::class;
-
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
     public static function form(Schema $schema): Schema
     {
@@ -63,4 +59,21 @@ class TaskLineItemResource extends Resource
                 SoftDeletingScope::class,
             ]);
     }
+
+
+    public static function getNavigationGroup(): ?string
+    {
+        return 'Workspace';
+    }
+
+    public static function getNavigationIcon(): ?string
+    {
+        return 'heroicon-o-list-bullet';
+    }
+
+    public static function getNavigationSort(): ?int
+    {
+        return 4;
+    }
+
 }
