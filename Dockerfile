@@ -25,12 +25,12 @@ RUN composer install \
 ###############################################
 # 3) Final runtime: PHP-FPM + Nginx on Debian
 ###############################################
-FROM php:8.4-fpm-bookworm AS app
+FROM php:8.4-fpm-bookworm AS php
 WORKDIR /var/www/html
 
-# Install nginx and PHP extensions required by Laravel
+# Install PHP extensions required by Laravel
 RUN apt-get update && apt-get install -y \
-    nginx bash git unzip supervisor \
+    bash git unzip \
     libonig-dev libpq-dev libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
     libicu-dev libssl-dev libxml2-dev \
  && docker-php-ext-configure gd --with-freetype --with-jpeg \
@@ -38,12 +38,10 @@ RUN apt-get update && apt-get install -y \
     pdo pdo_pgsql zip gd intl bcmath opcache mbstring exif \
  && rm -rf /var/lib/apt/lists/*
 
-# Copy source, composer vendor tree, and built assets
 COPY . .
 COPY --from=vendor /app/vendor ./vendor
 COPY --from=nodebuild /app/public/build ./public/build
 
-# Ensure cache / storage directories exist with safe permissions
 RUN mkdir -p storage/framework/cache/data \
     storage/framework/sessions \
     storage/framework/views \
@@ -53,9 +51,17 @@ RUN mkdir -p storage/framework/cache/data \
  && find storage -type f -exec chmod 664 {} \; \
  && chmod -R 775 bootstrap/cache
 
-# Copy nginx virtual host
+EXPOSE 9000
+
+###############################################
+# 4) Nginx runtime
+###############################################
+FROM nginx:1.27-alpine AS nginx
+WORKDIR /var/www/html
+
+COPY ./public ./public
+COPY --from=nodebuild /app/public/build ./public/build
 COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
+RUN apk add --no-cache bash
 
 EXPOSE 80
-
-CMD ["bash", "-c", "php-fpm -D && nginx -g 'daemon off;'"]
