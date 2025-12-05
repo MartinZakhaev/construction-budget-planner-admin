@@ -1,35 +1,71 @@
+version: "3.9"
+
 services:
   php:
     build:
       context: .
       target: phpruntime
     container_name: app-php
+    restart: unless-stopped
     env_file:
       - .env
-    working_dir: /var/www/html
-    restart: unless-stopped
+    environment:
+      # Pastikan APP_URL pakai http kalau belum ada TLS/terminasi SSL di depan
+      APP_URL: ${APP_URL:-http://localhost}
+      # Agar Queue/URL generated benar saat dibelakang proxy
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-*}
+    volumes:
+      # simpan storage sebagai volume supaya data upload/log persisten
+      - laravel-storage:/var/www/html/storage
+      # (opsional) kalau ingin lihat log di host:
+      # - ./storage/logs:/var/www/html/storage/logs
+    healthcheck:
+      test: ["CMD", "php", "-v"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
 
+  nginx:
+    build:
+      context: .
+      target: nginximage
+    container_name: app-nginx
+    depends_on:
+      - php
+    ports:
+      - "8080:80"     # akses di http://localhost:8080
+    restart: unless-stopped
+    volumes:
+      # Nginx butuh lihat public/build; kita sudah COPY di image.
+      # Kalau mau share storage untuk file public/storage, mount juga:
+      - laravel-storage:/var/www/html/storage:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/healthz || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+
+  # (opsional) Scheduler pakai image yang sama dengan php 8.4
   scheduler:
     build:
       context: .
       target: phpruntime
     container_name: app-scheduler
+    depends_on:
+      - php
+    restart: unless-stopped
     env_file:
       - .env
-    working_dir: /var/www/html
-    # Laravel 10+ ada schedule:work (loop)
-    command: ["bash","-lc","php artisan schedule:work"]
-    depends_on:
-      - php
-    restart: unless-stopped
+    environment:
+      APP_URL: ${APP_URL:-http://localhost}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-*}
+    command: >
+      bash -lc "
+        php artisan optimize || true &&
+        php artisan schedule:work
+      "
+    volumes:
+      - laravel-storage:/var/www/html/storage
 
-  nginx:
-    build:
-      context: .
-      target: nginximage   # <- inilah yang hilang tadi
-    container_name: app-nginx
-    ports:
-      - "80:80"
-    depends_on:
-      - php
-    restart: unless-stopped
+volumes:
+  laravel-storage:
