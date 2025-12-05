@@ -40,25 +40,31 @@ RUN apt-get update && apt-get install -y \
     exif \
  && rm -rf /var/lib/apt/lists/*
 
+# Composer binary
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-ENV COMPOSER_MEMORY_LIMIT=-1 \
+# >>> Prevent global-composer warning & keep composer isolated
+ENV COMPOSER_HOME=/tmp/composer \
+    COMPOSER_CACHE_DIR=/tmp/composer-cache \
+    COMPOSER_MEMORY_LIMIT=-1 \
     COMPOSER_ALLOW_SUPERUSER=1 \
     COMPOSER_DISABLE_XDEBUG_WARN=1
+RUN mkdir -p /tmp/composer /tmp/composer-cache
 
 # Jika ada isu kompatibilitas PHP 8.4, boleh aktifkan ini:
 # RUN composer config platform.php 8.3.0
 
 COPY composer.json composer.lock ./
-RUN php -v && php -m | sort && composer --version && composer validate -n
+RUN php -v && php -m | sort && composer --version && composer validate -n --no-plugins
 
-# Matikan artisan scripts saat build (hindari package:discover error)
+# Matikan artisan scripts & plugins saat build (hindari package:discover & plugin global)
 RUN composer install \
     --no-dev \
     --no-interaction \
     --prefer-dist \
     --optimize-autoloader \
     --no-scripts \
+    --no-plugins \
     -vvv \
     --no-progress \
  || (echo '--- COMPOSER DIAG ---' && php -v && php -m | sort && composer diagnose && exit 1)
@@ -70,6 +76,7 @@ RUN composer install \
     --prefer-dist \
     --optimize-autoloader \
     --no-scripts \
+    --no-plugins \
     -vvv \
     --no-progress \
  || (echo '--- COMPOSER DIAG (after copy) ---' && php -v && php -m | sort && composer diagnose && exit 1)
@@ -127,11 +134,8 @@ CMD ["php-fpm", "-F"]
 FROM nginx:1.27-alpine AS nginximage
 WORKDIR /var/www/html
 
-# Bawa kode & assets ke image nginx agar CSS/JS tersedia
 COPY --from=phpdeps  /app /var/www/html
 COPY --from=nodebuild /app/public/build /var/www/html/public/build
-
-# Default vhost (pastikan file ini ada di repo: nginx/default.conf)
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 
 RUN addgroup -g 1010 -S web && adduser -S -D -H -u 1010 -G web web \

@@ -27,8 +27,7 @@ services:
     volumes:
       - storagedata:/var/www/html/storage
     networks: [appnet]
-    depends_on:
-      - db
+    depends_on: [db]
 
   nginx:
     build:
@@ -40,9 +39,9 @@ services:
     pull_policy: never
     depends_on: [php]
     networks: [appnet]
-    # Dokploy: route domain ke service ini, Container Port = 80
     labels:
       - "traefik.enable=true"
+    # Dokploy: route domain ke service ini (Container Port 80)
 
   scheduler:
     image: filament-app:dev
@@ -62,7 +61,6 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
     networks: [appnet]
 
-  # Hapus ini jika pakai PostgreSQL eksternal
   db:
     image: postgres:16-alpine
     container_name: postgres
