@@ -3,24 +3,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: phpruntime
-    env_file:
-      - .env
-    environment:
-      APP_ENV: ${APP_ENV:-production}
-      APP_DEBUG: ${APP_DEBUG:-false}
-      LOG_CHANNEL: ${LOG_CHANNEL:-stderr}
-      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT:-5432}
-      DB_DATABASE: ${DB_DATABASE}
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
-      CACHE_DRIVER: ${CACHE_DRIVER:-redis}
-      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
-      SESSION_DRIVER: ${SESSION_DRIVER:-redis}
-      REDIS_HOST: ${REDIS_HOST:-redis}
-      REDIS_PORT: ${REDIS_PORT:-6379}
+      target: php
+    # Jika kamu set ENV via Dokploy UI, bagian environment boleh kosong.
+    # Jika ingin pakai .env file di repo, uncomment baris di bawah:
+    # env_file:
+    #   - .env
     expose:
       - "9000"
     depends_on:
@@ -29,11 +16,12 @@ services:
     networks:
       - appnet
 
-  nginx:   # <--- penting: nama service harus 'nginx'
+  nginx:
     build:
       context: .
       dockerfile: Dockerfile
-      target: nginximage
+    # target default di Dockerfile adalah "nginx" (stage terakhir), jadi tidak perlu target:
+    # target: nginx
     ports:
       - "8080:80"
     depends_on:
@@ -42,46 +30,12 @@ services:
     networks:
       - appnet
 
-  # Opsional: Redis untuk cache/queue/session
+  # Opsional tapi disediakan supaya Laravel/Filament bisa pakai Redis untuk cache/queue/session
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
-    restart: unless-stopped
-    networks:
-      - appnet
-
-  # Opsional: queue worker
-  queue:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: phpruntime
-    env_file:
-      - .env
-    depends_on:
-      - php
-      - redis
-    command: >
-      sh -lc "php artisan queue:work --tries=3 --sleep=1 --max-time=3600"
-    restart: unless-stopped
-    networks:
-      - appnet
-
-  # Opsional: scheduler
-  scheduler:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: phpruntime
-    env_file:
-      - .env
-    depends_on:
-      - php
-      - redis
-    command: >
-      sh -lc "php artisan schedule:work"
     restart: unless-stopped
     networks:
       - appnet

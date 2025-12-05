@@ -1,19 +1,19 @@
 # =========================
-# 1) Node builder: Vite build -> public/build
+# 1) Node builder: Vite build -> public/build (Filament 4 / Laravel)
 # =========================
 FROM node:22-bookworm AS nodebuild
 WORKDIR /app
 
-# Pasang dependencies dulu (lebih cepat build cache-nya)
+# Pasang deps dulu biar cache efisien
 COPY package*.json ./
 RUN npm ci
 
-# Copy seluruh project (lebih aman untuk Filament 4)
-# Pastikan .dockerignore mengecualikan node_modules, vendor, dll
+# Copy seluruh project (aman walau file config opsional tidak ada)
+# *Sangat disarankan punya .dockerignore agar konteks kecil*
 COPY . .
 
-# Build Vite
 ENV NODE_ENV=production
+# Pastikan folder public ada supaya output build tidak error
 RUN mkdir -p public
 RUN npm run build
 
@@ -30,10 +30,10 @@ RUN composer install --no-dev --prefer-dist --no-progress --no-interaction --no-
 # =========================
 # 3) PHP-FPM runtime (PHP 8.4)
 # =========================
-FROM php:8.4-fpm-bookworm AS phpruntime
+FROM php:8.4-fpm-bookworm AS php
 WORKDIR /var/www/html
 
-# Packages untuk Laravel + Filament
+# Libs umum untuk Laravel/Filament
 RUN apt-get update && apt-get install -y \
     bash git unzip \
     libonig-dev \
@@ -44,13 +44,13 @@ RUN apt-get update && apt-get install -y \
     pdo pdo_pgsql zip gd intl bcmath opcache mbstring exif \
  && rm -rf /var/lib/apt/lists/*
 
-# Copy kode Laravel
+# Copy source Laravel
 COPY . .
 
 # Copy vendor dari stage composer
 COPY --from=phpdeps /app/vendor ./vendor
 
-# Permission Laravel
+# Permission minimum
 RUN chown -R www-data:www-data storage bootstrap/cache \
  && find storage -type d -exec chmod 775 {} \; \
  && find storage -type f -exec chmod 664 {} \; \
@@ -63,19 +63,16 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD php -v || exit 1
 # =========================
 # 4) Nginx runtime (serve /public & Vite build)
 # =========================
-FROM nginx:1.27-alpine AS nginximage
+FROM nginx:1.27-alpine AS nginx
 WORKDIR /var/www/html
 
-# Copy folder public Laravel
+# Copy public Laravel & hasil build Vite
 COPY ./public ./public
-
-# Copy hasil Vite build
 COPY --from=nodebuild /app/public/build ./public/build
 
-# Copy Nginx config (dari docker/nginx/default.conf)
+# Pakai konfigurasi dari repo (path sesuai permintaanmu)
 COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
 
-# Untuk debugging
 RUN apk add --no-cache bash
 
 EXPOSE 80
