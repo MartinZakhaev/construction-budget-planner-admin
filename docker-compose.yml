@@ -2,81 +2,34 @@ services:
   php:
     build:
       context: .
-      dockerfile: Dockerfile
       target: phpruntime
-    image: filament-app:dev
-    container_name: php
-    pull_policy: never
-    environment:
-      APP_ENV: ${APP_ENV:-development}
-      APP_DEBUG: "true"
-      APP_URL: ${APP_URL}
-      APP_KEY: ${APP_KEY}
+    container_name: app-php
+    env_file:
+      - .env
+    working_dir: /var/www/html
+    restart: unless-stopped
 
-      DB_CONNECTION: pgsql
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_DATABASE: ${DB_DATABASE}
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
-
-      CACHE_STORE: file
-      SESSION_DRIVER: cookie
-      QUEUE_CONNECTION: sync
-
-    volumes:
-      - storagedata:/var/www/html/storage
-    networks: [appnet]
-    depends_on: [db]
+  scheduler:
+    build:
+      context: .
+      target: phpruntime
+    container_name: app-scheduler
+    env_file:
+      - .env
+    working_dir: /var/www/html
+    # Laravel 10+ ada schedule:work (loop)
+    command: ["bash","-lc","php artisan schedule:work"]
+    depends_on:
+      - php
+    restart: unless-stopped
 
   nginx:
     build:
       context: .
-      dockerfile: Dockerfile
-      target: nginximage
-    image: filament-nginx:dev
-    container_name: nginx
-    pull_policy: never
-    depends_on: [php]
-    networks: [appnet]
-    labels:
-      - "traefik.enable=true"
-    # Dokploy: route domain ke service ini (Container Port 80)
-
-  scheduler:
-    image: filament-app:dev
-    container_name: scheduler
-    pull_policy: never
-    depends_on: [php]
-    command: php artisan schedule:work
-    restart: always
-    environment:
-      APP_ENV: ${APP_ENV:-development}
-      APP_KEY: ${APP_KEY}
-      DB_CONNECTION: pgsql
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_DATABASE: ${DB_DATABASE}
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
-    networks: [appnet]
-
-  db:
-    image: postgres:16-alpine
-    container_name: postgres
-    pull_policy: if_not_present
-    environment:
-      POSTGRES_DB: ${DB_DATABASE}
-      POSTGRES_USER: ${DB_USERNAME}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - dbdata:/var/lib/postgresql/data
-    networks: [appnet]
-
-volumes:
-  dbdata:
-  storagedata:
-
-networks:
-  appnet:
-    driver: bridge
+      target: nginximage   # <- inilah yang hilang tadi
+    container_name: app-nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - php
+    restart: unless-stopped
