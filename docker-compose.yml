@@ -1,34 +1,128 @@
 services:
-  nginx:
+  app:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: construction-budget-planner
     ports:
-      - "${HTTP_PORT:-8080}:80"
+      - "${HTTP_PORT:-8080}:8080"
     environment:
+      # Laravel Configuration
       APP_ENV: production
       APP_DEBUG: "false"
       APP_URL: https://planin.43-157-213-47.sslip.io
+      APP_KEY: ${APP_KEY}
+      
+      # Database Configuration
       DB_CONNECTION: pgsql
       DB_HOST: ${DB_HOST:-43.157.213.47}
       DB_PORT: ${DB_PORT:-5432}
       DB_DATABASE: ${DB_DATABASE:-filament}
       DB_USERNAME: ${DB_USERNAME:-filament}
-      DB_PASSWORD: ${DB_PASSWORD:-change-me}
+      DB_PASSWORD: ${DB_PASSWORD}
+      
+      # Session and Cache
       SESSION_DRIVER: database
+      SESSION_LIFETIME: 120
       CACHE_STORE: database
       QUEUE_CONNECTION: database
+      
+      # Filesystem
+      FILESYSTEM_DISK: local
+      
+      # Logging
+      LOG_CHANNEL: stack
+      LOG_STACK: single
+      LOG_LEVEL: ${LOG_LEVEL:-error}
+      
+      # Timezone
       TZ: ${TZ:-UTC}
+      
+      # Trust Proxies (for reverse proxy)
+      TRUSTED_PROXIES: "*"
+      
+      # Additional Laravel settings
+      BROADCAST_CONNECTION: log
+      MEMCACHED_HOST: 127.0.0.1
+      REDIS_CLIENT: phpredis
+      REDIS_HOST: 127.0.0.1
+      REDIS_PASSWORD: null
+      REDIS_PORT: 6379
+      
+      # Mail configuration (adjust as needed)
+      MAIL_MAILER: log
+      MAIL_HOST: 127.0.0.1
+      MAIL_PORT: 2525
+      MAIL_USERNAME: null
+      MAIL_PASSWORD: null
+      MAIL_FROM_ADDRESS: "noreply@planin.43-157-213-47.sslip.io"
+      MAIL_FROM_NAME: "${APP_NAME:-Construction Budget Planner}"
+      
+      # Vite configuration
+      VITE_APP_NAME: "${APP_NAME:-Construction Budget Planner}"
+    
     volumes:
       - app-storage:/var/www/html/storage
       - app-bootstrap-cache:/var/www/html/bootstrap/cache
+    
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://127.0.0.1/ || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8080/health || exit 1"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
+      start_period: 60s
       retries: 5
+    
     restart: unless-stopped
+    
+    # Dokploy-specific labels
+    labels:
+      # Application metadata
+      dokploy.application.name: "construction-budget-planner"
+      dokploy.application.type: "docker-compose"
+      dokploy.application.domain: "planin.43-157-213-47.sslip.io"
+      
+      # Health check configuration
+      dokploy.healthcheck.path: "/health"
+      dokploy.healthcheck.port: "8080"
+      dokploy.healthcheck.interval: "30s"
+      dokploy.healthcheck.timeout: "10s"
+      dokploy.healthcheck.retries: "5"
+      
+      # Port configuration
+      dokploy.port: "8080"
+      dokploy.protocol: "http"
+      
+      # SSL configuration (handled by Dokploy reverse proxy)
+      dokploy.ssl.enabled: "true"
+      dokploy.ssl.issuer: "letsencrypt"
+      
+      # Deployment configuration
+      dokploy.deploy.auto: "true"
+      dokploy.deploy.restart: "true"
+      
+      # Resource limits (adjust as needed)
+      dokploy.resources.memory.limit: "1G"
+      dokploy.resources.memory.reservation: "512M"
+      dokploy.resources.cpu.limit: "1"
+      dokploy.resources.cpu.reservation: "0.5"
+    
+    # Network configuration for host database access
+    network_mode: bridge
+    
+    # Add extra hosts if needed for database connectivity
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
   app-storage:
+    driver: local
   app-bootstrap-cache:
+    driver: local
+
+# Optional: Define custom network for better isolation
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
