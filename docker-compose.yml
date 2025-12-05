@@ -3,8 +3,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: phpruntime
     image: filament-app:dev
     container_name: php
+    pull_policy: never
     environment:
       APP_ENV: ${APP_ENV:-development}
       APP_DEBUG: "true"
@@ -24,33 +26,31 @@ services:
 
     volumes:
       - storagedata:/var/www/html/storage
-    networks:
-      - appnet
-    pull_policy: never
+    networks: [appnet]
+    depends_on:
+      - db
 
   nginx:
-    image: filament-app:dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: nginximage
+    image: filament-nginx:dev
     container_name: nginx
-    depends_on:
-      - php
     pull_policy: never
-    volumes:
-      - storagedata:/var/www/html/storage
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-    networks:
-      - appnet
+    depends_on: [php]
+    networks: [appnet]
+    # Dokploy: route domain ke service ini, Container Port = 80
     labels:
       - "traefik.enable=true"
-      # Domain + SSL nanti diset di UI Dokploy → Router → http/https → loadbalancer service=nginx
 
   scheduler:
     image: filament-app:dev
     container_name: scheduler
-    depends_on:
-      - php
+    pull_policy: never
+    depends_on: [php]
     command: php artisan schedule:work
     restart: always
-    pull_policy: never
     environment:
       APP_ENV: ${APP_ENV:-development}
       APP_KEY: ${APP_KEY}
@@ -60,24 +60,20 @@ services:
       DB_DATABASE: ${DB_DATABASE}
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
-    networks:
-      - appnet
+    networks: [appnet]
 
-  # ---- Optional PostgreSQL local ----
-  # Hapus kalau pakai DB eksternal
+  # Hapus ini jika pakai PostgreSQL eksternal
   db:
     image: postgres:16-alpine
     container_name: postgres
+    pull_policy: if_not_present
     environment:
       POSTGRES_DB: ${DB_DATABASE}
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - dbdata:/var/lib/postgresql/data
-    networks:
-      - appnet
-    pull_policy: if_not_present
-
+    networks: [appnet]
 
 volumes:
   dbdata:

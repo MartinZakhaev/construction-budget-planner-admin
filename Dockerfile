@@ -46,17 +46,19 @@ ENV COMPOSER_MEMORY_LIMIT=-1 \
     COMPOSER_ALLOW_SUPERUSER=1 \
     COMPOSER_DISABLE_XDEBUG_WARN=1
 
-# Jika ada isu kompatibilitas PHP 8.4, boleh aktifkan baris ini:
+# Jika ada isu kompatibilitas PHP 8.4, boleh aktifkan ini:
 # RUN composer config platform.php 8.3.0
 
 COPY composer.json composer.lock ./
 RUN php -v && php -m | sort && composer --version && composer validate -n
 
+# Matikan artisan scripts saat build (hindari package:discover error)
 RUN composer install \
     --no-dev \
     --no-interaction \
     --prefer-dist \
     --optimize-autoloader \
+    --no-scripts \
     -vvv \
     --no-progress \
  || (echo '--- COMPOSER DIAG ---' && php -v && php -m | sort && composer diagnose && exit 1)
@@ -67,13 +69,14 @@ RUN composer install \
     --no-interaction \
     --prefer-dist \
     --optimize-autoloader \
+    --no-scripts \
     -vvv \
     --no-progress \
  || (echo '--- COMPOSER DIAG (after copy) ---' && php -v && php -m | sort && composer diagnose && exit 1)
 
 
 # ============ Stage 3: Runtime (PHP-FPM 8.4) ============
-FROM php:8.4-fpm-bookworm
+FROM php:8.4-fpm-bookworm AS phpruntime
 WORKDIR /var/www/html
 
 RUN apt-get update && apt-get install -y \
@@ -109,12 +112,31 @@ RUN { \
   echo 'opcache.max_accelerated_files=20000'; \
 } > /usr/local/etc/php/conf.d/opcache.ini
 
-COPY --from=phpdeps /app /var/www/html
+# Copy app (vendor sudah dari phpdeps) + assets build
+COPY --from=phpdeps  /app /var/www/html
 COPY --from=nodebuild /app/public/build /var/www/html/public/build
 
 RUN mkdir -p storage bootstrap/cache \
  && chown -R www-data:www-data storage bootstrap/cache
 
 USER www-data
-
 CMD ["php-fpm", "-F"]
+
+
+# ============ Stage 4: Nginx image (serve public) ============
+FROM nginx:1.27-alpine AS nginximage
+WORKDIR /var/www/html
+
+# Bawa kode & assets ke image nginx agar CSS/JS tersedia
+COPY --from=phpdeps  /app /var/www/html
+COPY --from=nodebuild /app/public/build /var/www/html/public/build
+
+# Default vhost (pastikan file ini ada di repo: nginx/default.conf)
+COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+
+RUN addgroup -g 1010 -S web && adduser -S -D -H -u 1010 -G web web \
+ && chown -R web:web /var/www/html
+USER web
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
