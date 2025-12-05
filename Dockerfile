@@ -138,9 +138,10 @@ COPY --from=phpdeps  /app /var/www/html
 COPY --from=nodebuild /app/public/build /var/www/html/public/build
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 
-RUN addgroup -g 1010 -S web && adduser -S -D -H -u 1010 -G web web \
- && chown -R web:web /var/www/html
-USER web
+# Keep running as root so nginx can bind to :80
+# (Optional) tighten perms but keep readable for nginx:
+RUN chown -R root:root /var/www/html && chmod -R a+rX /var/www/html
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
+
