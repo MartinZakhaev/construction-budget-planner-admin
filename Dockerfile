@@ -1,13 +1,14 @@
-# =========================
-# 1) Node builder: Vite build -> public/build (Filament 4 / Laravel)
-# =========================
+###############################################
+# 1) Node Builder (Vite build for Filament 4)
+###############################################
 FROM node:22-bookworm AS nodebuild
 WORKDIR /app
 
+# Install frontend dependencies
 COPY package*.json ./
 RUN npm ci
 
-# Copy seluruh project (aman walau file config opsional tidak ada)
+# Copy entire project (safe for Filament 4)
 COPY . .
 
 ENV NODE_ENV=production
@@ -15,22 +16,22 @@ RUN mkdir -p public
 RUN npm run build
 
 
-# =========================
-# 2) Composer vendor (IGNORE ext-intl on this stage only)
-# =========================
+###############################################
+# 2) Composer Vendor Builder
+###############################################
 FROM composer:2 AS phpdeps
 WORKDIR /app
-ENV COMPOSER_ALLOW_SUPERUSER=1
 COPY composer.json composer.lock ./
-# ⬇️ Kunci perubahan: abaikan cek ext-intl di stage ini
+
+# Ignore ext-intl requirement ONLY in builder stage
 RUN composer install \
     --no-dev --prefer-dist --no-progress --no-interaction --no-scripts \
     --ignore-platform-req=ext-intl
 
 
-# =========================
-# 3) PHP-FPM runtime (PHP 8.4)
-# =========================
+###############################################
+# 3) PHP Runtime (PHP 8.4 FPM)
+###############################################
 FROM php:8.4-fpm-bookworm AS php
 WORKDIR /var/www/html
 
@@ -40,40 +41,40 @@ RUN apt-get update && apt-get install -y \
     libpq-dev libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
     libicu-dev libssl-dev libxml2-dev \
  && docker-php-ext-configure gd --with-freetype --with-jpeg \
- && docker-php-ext-install -j"$(nproc)" \
+ && docker-php-ext-install -j$(nproc) \
     pdo pdo_pgsql zip gd intl bcmath opcache mbstring exif \
  && rm -rf /var/lib/apt/lists/*
 
-# Copy source Laravel
+# Copy Laravel source
 COPY . .
 
-# Copy vendor dari stage composer
+# Copy vendor from composer stage
 COPY --from=phpdeps /app/vendor ./vendor
 
-# Permission minimum
+# Set Laravel permissions
 RUN chown -R www-data:www-data storage bootstrap/cache \
  && find storage -type d -exec chmod 775 {} \; \
  && find storage -type f -exec chmod 664 {} \; \
  && chmod -R 775 bootstrap/cache
 
 EXPOSE 9000
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD php -v || exit 1
 
 
-# =========================
-# 4) Nginx runtime (serve /public & Vite build)
-# =========================
+###############################################
+# 4) Nginx Runtime
+###############################################
 FROM nginx:1.27-alpine AS nginx
 WORKDIR /var/www/html
 
+# Copy Laravel public
 COPY ./public ./public
+
+# Copy Vite build from nodebuild stage
 COPY --from=nodebuild /app/public/build ./public/build
 
-# Pakai konfigurasi dari repo
+# Copy Nginx config
 COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
 
 RUN apk add --no-cache bash
 
 EXPOSE 80
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1
