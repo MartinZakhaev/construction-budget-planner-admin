@@ -1,0 +1,66 @@
+<?php
+
+namespace App\Filament\Resources\TaskCatalogs;
+
+use App\Filament\Resources\TaskCatalogs\Pages\CreateTaskCatalog;
+use App\Filament\Resources\TaskCatalogs\Pages\EditTaskCatalog;
+use App\Filament\Resources\TaskCatalogs\Pages\ListTaskCatalogs;
+use App\Filament\Resources\TaskCatalogs\Pages\ViewTaskCatalog;
+use App\Filament\Resources\TaskCatalogs\Schemas\TaskCatalogForm;
+use App\Filament\Resources\TaskCatalogs\Schemas\TaskCatalogInfolist;
+use App\Filament\Resources\TaskCatalogs\Tables\TaskCatalogsTable;
+use App\Models\TaskCatalog;
+use BackedEnum;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
+
+class TaskCatalogResource extends Resource
+{
+    protected static ?string $model = TaskCatalog::class;
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
+    public static function form(Schema $schema): Schema
+    {
+        return TaskCatalogForm::configure($schema);
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return TaskCatalogInfolist::configure($schema);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return TaskCatalogsTable::configure($table);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            //
+        ];
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => ListTaskCatalogs::route('/'),
+            'create' => CreateTaskCatalog::route('/create'),
+            'view' => ViewTaskCatalog::route('/{record}'),
+            'edit' => EditTaskCatalog::route('/{record}/edit'),
+        ];
+    }
+
+    public static function getRecordRouteBindingEloquentQuery(): Builder
+    {
+        return parent::getRecordRouteBindingEloquentQuery()
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ]);
+    }
+}
