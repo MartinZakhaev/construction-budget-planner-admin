@@ -1,42 +1,15 @@
 services:
-  php:
+  app:
     build:
       context: .
       dockerfile: Dockerfile
-      target: php
-    expose:
-      - "9000"
-    restart: unless-stopped
-    depends_on:
-      - redis
-    networks:
-      - appnet
-
-  nginx:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: nginx
     ports:
       - "8080:80"
     restart: unless-stopped
-    depends_on:
-      - php
-    networks:
-      - appnet
-
-  redis:
-    image: redis:7-alpine
-    command: redis-server --appendonly yes
     volumes:
-      - redis-data:/data
-    restart: unless-stopped
-    networks:
-      - appnet
+      - storage-data:/var/www/html/storage
+      - cache-data:/var/www/html/bootstrap/cache
 
 volumes:
-  redis-data:
-
-networks:
-  appnet:
-    driver: bridge
+  storage-data:
+  cache-data:
