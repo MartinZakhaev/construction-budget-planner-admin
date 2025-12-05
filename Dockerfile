@@ -25,13 +25,13 @@ RUN composer install \
 ###############################################
 # 3) Final runtime: PHP-FPM + Nginx on Debian
 ###############################################
-FROM php:8.4-fpm-bookworm AS php
+FROM php:8.4-fpm-bookworm AS app
 WORKDIR /var/www/html
 ENV COMPOSER_ALLOW_SUPERUSER=1
 
 # Install PHP extensions required by Laravel
 RUN apt-get update && apt-get install -y \
-    bash git unzip postgresql-client \
+    bash git unzip curl postgresql-client nginx \
     libonig-dev libpq-dev libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
     libicu-dev libssl-dev libxml2-dev \
  && docker-php-ext-configure gd --with-freetype --with-jpeg \
@@ -54,19 +54,17 @@ RUN mkdir -p storage/framework/cache/data \
  && chown -R www-data:www-data storage bootstrap/cache \
  && find storage -type d -exec chmod 775 {} \; \
  && find storage -type f -exec chmod 664 {} \; \
- && chmod -R 775 bootstrap/cache
+ && chmod -R 775 bootstrap/cache \
+ && mkdir -p /run/php \
+ && chown www-data:www-data /run/php
 
-EXPOSE 9000
-
-###############################################
-# 4) Nginx runtime
-###############################################
-FROM nginx:1.27-alpine AS nginx
-WORKDIR /var/www/html
-
-COPY --from=php /var/www/html/public ./public
-COPY --from=php /var/www/html/storage ./storage
 COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
-RUN apk add --no-cache bash
+
+# Remove default nginx site and send logs to stdout/stderr
+RUN rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf.default 2>/dev/null || true \
+ && ln -sf /dev/stdout /var/log/nginx/access.log \
+ && ln -sf /dev/stderr /var/log/nginx/error.log
 
 EXPOSE 80
+
+CMD ["bash", "-lc", "php-fpm -D && nginx -g 'daemon off;'"]
