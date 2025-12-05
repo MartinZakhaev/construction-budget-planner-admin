@@ -4,27 +4,28 @@
 FROM node:22-bookworm AS nodebuild
 WORKDIR /app
 
-# Pasang deps dulu biar cache efisien
 COPY package*.json ./
 RUN npm ci
 
 # Copy seluruh project (aman walau file config opsional tidak ada)
-# *Sangat disarankan punya .dockerignore agar konteks kecil*
 COPY . .
 
 ENV NODE_ENV=production
-# Pastikan folder public ada supaya output build tidak error
 RUN mkdir -p public
 RUN npm run build
 
 
 # =========================
-# 2) Composer vendor
+# 2) Composer vendor (IGNORE ext-intl on this stage only)
 # =========================
 FROM composer:2 AS phpdeps
 WORKDIR /app
+ENV COMPOSER_ALLOW_SUPERUSER=1
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --prefer-dist --no-progress --no-interaction --no-scripts
+# ⬇️ Kunci perubahan: abaikan cek ext-intl di stage ini
+RUN composer install \
+    --no-dev --prefer-dist --no-progress --no-interaction --no-scripts \
+    --ignore-platform-req=ext-intl
 
 
 # =========================
@@ -33,7 +34,6 @@ RUN composer install --no-dev --prefer-dist --no-progress --no-interaction --no-
 FROM php:8.4-fpm-bookworm AS php
 WORKDIR /var/www/html
 
-# Libs umum untuk Laravel/Filament
 RUN apt-get update && apt-get install -y \
     bash git unzip \
     libonig-dev \
@@ -66,11 +66,10 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD php -v || exit 1
 FROM nginx:1.27-alpine AS nginx
 WORKDIR /var/www/html
 
-# Copy public Laravel & hasil build Vite
 COPY ./public ./public
 COPY --from=nodebuild /app/public/build ./public/build
 
-# Pakai konfigurasi dari repo (path sesuai permintaanmu)
+# Pakai konfigurasi dari repo
 COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
 
 RUN apk add --no-cache bash
