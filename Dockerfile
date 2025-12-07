@@ -18,11 +18,12 @@ WORKDIR /var/www/html
 # Copy application files
 COPY . .
 
+# FORCE CACHE BUST: 2025-12-07-v2
+# Remove any .env files explicitly to force usage of environment variables
+RUN rm -f .env .env.example .env.production bootstrap/cache/*.php
+
 # Copy built assets from node_builder
 COPY --from=node_builder /app/public/build ./public/build
-
-# Remove any .env files to ensure we use environment variables from Dokploy
-RUN rm -f .env .env.example .env.production
 
 # Install PHP dependencies as root
 RUN composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
