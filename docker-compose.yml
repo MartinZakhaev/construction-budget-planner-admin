@@ -9,7 +9,6 @@ services:
       - "8080:8080"
     environment:
       # These flags ensure the image runs optimized for production
-      APP_ENV: production
       AUTORUN_ENABLED: "true"
       AUTORUN_LARAVEL_MIGRATION: "true"
       AUTORUN_LARAVEL_STORAGE_LINK: "true"
