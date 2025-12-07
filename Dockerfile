@@ -9,6 +9,10 @@ FROM serversideup/php:8.4-fpm-nginx
 
 # Stay as root for build steps
 USER root
+
+# Install required PHP extensions
+RUN install-php-extensions intl
+
 WORKDIR /var/www/html
 
 # Copy application files
