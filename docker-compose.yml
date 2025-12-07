@@ -1,0 +1,25 @@
+services:
+  app:
+    image: construction-budget-planner-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # These flags ensure the image runs optimized for production
+      APP_ENV: production
+      AUTORUN_ENABLED: "true"
+      AUTORUN_LARAVEL_MIGRATION: "true"
+      AUTORUN_LARAVEL_STORAGE_LINK: "true"
+      # AUTORUN_LARAVEL_CONFIG_CACHE: "true" # Enable if env vars are static, otherwise be careful
+      # AUTORUN_LARAVEL_ROUTE_CACHE: "true"
+      # AUTORUN_LARAVEL_VIEW_CACHE: "true"
+      
+    # Healthcheck to ensure Dokploy knows when the service is up
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/up"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
