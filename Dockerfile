@@ -7,24 +7,22 @@ RUN npm run build
 
 FROM serversideup/php:8.4-fpm-nginx
 
-# Switch to root to install extra extensions if needed (usually standard ones are covered)
-# USER root
-# RUN install-php-extensions ...
-
-# Switch back to webuser for app installation
-USER webuser
+# Stay as root for build steps
+USER root
 WORKDIR /var/www/html
 
 # Copy application files
-COPY --chown=webuser:webgroup . .
+COPY . .
 
 # Copy built assets from node_builder
-COPY --chown=webuser:webgroup --from=node_builder /app/public/build ./public/build
+COPY --from=node_builder /app/public/build ./public/build
 
-# Install PHP dependencies
+# Install PHP dependencies as root
 RUN composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 
-# Run Laravel optimizations (can also be done in entrypoint, but doing here saves boot time)
-# Note: Some cannot be run without DB connection (like verify). config:cache might fail if env vars aren't present.
-# It is safer to NOT run config:cache in build if env vars are dynamic (which they are in Dokploy).
-# We will rely on running these at runtime or via AUTORUN_LARAVEL_... env vars.
+# Set proper permissions for Laravel
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html/storage \
+    && chmod -R 755 /var/www/html/bootstrap/cache
+
+# The base image will handle switching to the appropriate user at runtime
