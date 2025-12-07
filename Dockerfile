@@ -24,6 +24,7 @@ RUN rm -f .env .env.example .env.production bootstrap/cache/*.php
 
 # Copy built assets from node_builder
 COPY --from=node_builder /app/public/build ./public/build
+RUN rm -f public/hot
 
 # Install PHP dependencies as root
 RUN composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
