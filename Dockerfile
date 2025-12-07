@@ -21,6 +21,9 @@ COPY . .
 # Copy built assets from node_builder
 COPY --from=node_builder /app/public/build ./public/build
 
+# Remove any .env files to ensure we use environment variables from Dokploy
+RUN rm -f .env .env.example .env.production
+
 # Install PHP dependencies as root
 RUN composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 
